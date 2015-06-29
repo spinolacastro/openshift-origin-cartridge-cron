@@ -1,6 +1,6 @@
 ---
 Name: cron
-Vendor: Red Hat
+Vendor: GetupCloud
 Cartridge-Short-Name: CRON
 Version: '1.4'
 Architecture: noarch
@@ -13,7 +13,7 @@ Website: http://www.openshift.com/
 Cartridge-Version: 0.0.13
 Compatible-Versions:
 - 0.0.12
-Cartridge-Vendor: redhat
+Cartridge-Vendor: getupcloud
 Categories:
 - embedded
 - plugin
