@@ -67,47 +67,34 @@ if [ -d "$SCRIPTS_DIR" ]; then
      executor="timeout -s 9 $MAX_RUN_TIME run-parts"
    fi
 
-   (
-      flock -e -n 9
-      status=$?
 
-      (
-          if [ 0 -ne $status ]; then
-              log_message ":SKIPPED: $freq cron run for openshift user '$OPENSHIFT_GEAR_UUID'"
-              exit 1
-          fi
+    if [ -f "$OPENSHIFT_CRON_DIR/log/cron.$freq.log" ]; then
+        mv -f "$OPENSHIFT_CRON_DIR/log/cron.$freq.log" "$OPENSHIFT_CRON_DIR/log/cron.$freq.log.1"
+    fi
 
-          if [ -f "$OPENSHIFT_CRON_DIR/log/cron.$freq.log" ]; then
-              mv -f "$OPENSHIFT_CRON_DIR/log/cron.$freq.log" "$OPENSHIFT_CRON_DIR/log/cron.$freq.log.1"
-          fi
+    LOGPIPE=${OPENSHIFT_HOMEDIR}/app-root/runtime/logshifter-cron-${freq}
+    rm -f $LOGPIPE && mkfifo $LOGPIPE
+    /usr/bin/logshifter -tag cron_${freq} < $LOGPIPE &
 
-          LOGPIPE=${OPENSHIFT_HOMEDIR}/app-root/runtime/logshifter-cron-${freq}
-          rm -f $LOGPIPE && mkfifo $LOGPIPE
-          /usr/bin/logshifter -tag cron_${freq} < $LOGPIPE &
+    separator=$(seq -s_ 75 | tr -d '[:digit:]')
+    {
+        echo $separator
+        echo "`date`: START $freq cron run"
+        echo $separator
 
-          separator=$(seq -s_ 75 | tr -d '[:digit:]')
-          {
-              echo $separator
-              echo "`date`: START $freq cron run"
-              echo $separator
+        #  Use run-parts - gives us jobs.{deny,allow} and whitelists.
+        $executor "$SCRIPTS_DIR"
+        status=$?
+        if [ 124 -eq $status -o 137 -eq $status ]; then
+            wmsg="Warning: $freq cron run terminated as it exceeded max run time"
+            log_message "$wmsg [$MAX_RUN_TIME] for openshift user '$OPENSHIFT_GEAR_UUID'" > /dev/null 2>&1
+            echo "$wmsg"
+        fi
 
-              #  Use run-parts - gives us jobs.{deny,allow} and whitelists.
-              $executor "$SCRIPTS_DIR"
-              status=$?
-              if [ 124 -eq $status -o 137 -eq $status ]; then
-                  wmsg="Warning: $freq cron run terminated as it exceeded max run time"
-                  log_message "$wmsg [$MAX_RUN_TIME] for openshift user '$OPENSHIFT_GEAR_UUID'" > /dev/null 2>&1
-                  echo "$wmsg"
-              fi
-
-              echo $separator
-              echo "`date`: END $freq cron run - status=$status"
-              echo $separator
-          } &> $LOGPIPE
-
-      ) 9>&-
-
-   ) 9>${OPENSHIFT_HOMEDIR}app-root/runtime/.cron.$freq.lock
+        echo $separator
+        echo "`date`: END $freq cron run - status=$status"
+        echo $separator
+    } &> $LOGPIPE
 fi
 
 log_message ":END: $freq cron run for openshift user '$OPENSHIFT_GEAR_UUID'"
